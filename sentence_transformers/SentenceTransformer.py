@@ -24,7 +24,15 @@ from .util import import_from_string, batch_to_device, http_get
 from .models import Transformer, Pooling
 from . import __version__
 
+try:
+    import wandb
+
+    wandb_available = True
+except ImportError:
+    wandb_available = False
+
 logger = logging.getLogger(__name__)
+
 
 class SentenceTransformer(nn.Sequential):
     """
@@ -34,6 +42,7 @@ class SentenceTransformer(nn.Sequential):
     :param modules: This parameter can be used to create custom SentenceTransformer models from scratch.
     :param device: Device (like 'cuda' / 'cpu') that should be used for computation. If None, checks if a GPU can be used.
     """
+
     def __init__(self, model_name_or_path: str = None, modules: Iterable[nn.Module] = None, device: str = None):
         save_model_to = None
 
@@ -41,7 +50,8 @@ class SentenceTransformer(nn.Sequential):
             logger.info("Load pretrained SentenceTransformer: {}".format(model_name_or_path))
             model_path = model_name_or_path
 
-            if not os.path.isdir(model_path) and not model_path.startswith('http://') and not model_path.startswith('https://'):
+            if not os.path.isdir(model_path) and not model_path.startswith('http://') and not model_path.startswith(
+                    'https://'):
                 logger.info("Did not find folder {}".format(model_path))
 
                 if '\\' in model_path or model_path.count('/') > 1:
@@ -52,7 +62,8 @@ class SentenceTransformer(nn.Sequential):
 
             if model_path.startswith('http://') or model_path.startswith('https://'):
                 model_url = model_path
-                folder_name = model_url.replace("https://", "").replace("http://", "").replace("/", "_")[:250].rstrip('.zip')
+                folder_name = model_url.replace("https://", "").replace("http://", "").replace("/", "_")[:250].rstrip(
+                    '.zip')
 
                 cache_folder = os.getenv('SENTENCE_TRANSFORMERS_HOME')
                 if cache_folder is None:
@@ -60,7 +71,8 @@ class SentenceTransformer(nn.Sequential):
                         from torch.hub import _get_torch_home
                         torch_cache_home = _get_torch_home()
                     except ImportError:
-                        torch_cache_home = os.path.expanduser(os.getenv('TORCH_HOME', os.path.join(os.getenv('XDG_CACHE_HOME', '~/.cache'), 'torch')))
+                        torch_cache_home = os.path.expanduser(
+                            os.getenv('TORCH_HOME', os.path.join(os.getenv('XDG_CACHE_HOME', '~/.cache'), 'torch')))
 
                     cache_folder = os.path.join(torch_cache_home, 'sentence_transformers')
 
@@ -71,9 +83,10 @@ class SentenceTransformer(nn.Sequential):
                         os.remove(model_path)
 
                     model_url = model_url.rstrip("/")
-                    logger.info("Downloading sentence transformer model from {} and saving it at {}".format(model_url, model_path))
+                    logger.info("Downloading sentence transformer model from {} and saving it at {}".format(model_url,
+                                                                                                            model_path))
 
-                    model_path_tmp = model_path.rstrip("/").rstrip("\\")+"_part"
+                    model_path_tmp = model_path.rstrip("/").rstrip("\\") + "_part"
                     try:
                         zip_save_path = os.path.join(model_path_tmp, 'model.zip')
                         http_get(model_url, zip_save_path)
@@ -84,11 +97,16 @@ class SentenceTransformer(nn.Sequential):
                     except requests.exceptions.HTTPError as e:
                         shutil.rmtree(model_path_tmp)
                         if e.response.status_code == 429:
-                            raise Exception("Too many requests were detected from this IP for the model {}. Please contact info@nils-reimers.de for more information.".format(model_name_or_path))
+                            raise Exception(
+                                "Too many requests were detected from this IP for the model {}. Please contact info@nils-reimers.de for more information.".format(
+                                    model_name_or_path))
 
                         if e.response.status_code == 404:
-                            logger.warning('SentenceTransformer-Model {} not found. Try to create it from scratch'.format(model_url))
-                            logger.warning('Try to create Transformer Model {} with mean pooling'.format(model_name_or_path))
+                            logger.warning(
+                                'SentenceTransformer-Model {} not found. Try to create it from scratch'.format(
+                                    model_url))
+                            logger.warning(
+                                'Try to create Transformer Model {} with mean pooling'.format(model_name_or_path))
 
                             save_model_to = model_path
                             model_path = None
@@ -101,7 +119,6 @@ class SentenceTransformer(nn.Sequential):
                         shutil.rmtree(model_path)
                         raise e
 
-
             #### Load from disk
             if model_path is not None:
                 logger.info("Load SentenceTransformer from folder: {}".format(model_path))
@@ -110,7 +127,9 @@ class SentenceTransformer(nn.Sequential):
                     with open(os.path.join(model_path, 'config.json')) as fIn:
                         config = json.load(fIn)
                         if config['__version__'] > __version__:
-                            logger.warning("You try to use a model that was created with version {}, however, your version is {}. This might cause unexpected behavior or errors. In that case, try to update to the latest version.\n\n\n".format(config['__version__'], __version__))
+                            logger.warning(
+                                "You try to use a model that was created with version {}, however, your version is {}. This might cause unexpected behavior or errors. In that case, try to update to the latest version.\n\n\n".format(
+                                    config['__version__'], __version__))
 
                 with open(os.path.join(model_path, 'modules.json')) as fIn:
                     contained_modules = json.load(fIn)
@@ -120,7 +139,6 @@ class SentenceTransformer(nn.Sequential):
                     module_class = import_from_string(module_config['type'])
                     module = module_class.load(os.path.join(model_path, module_config['path']))
                     modules[module_config['name']] = module
-
 
         if modules is not None and not isinstance(modules, OrderedDict):
             modules = OrderedDict([(str(idx), module) for idx, module in enumerate(modules)])
@@ -132,10 +150,9 @@ class SentenceTransformer(nn.Sequential):
 
         self._target_device = torch.device(device)
 
-        #We created a new model from scratch based on a Transformer model. Save the SBERT model in the cache folder
+        # We created a new model from scratch based on a Transformer model. Save the SBERT model in the cache folder
         if save_model_to is not None:
             self.save(save_model_to)
-
 
     def encode(self, sentences: Union[str, List[str], List[int]],
                batch_size: int = 32,
@@ -164,13 +181,14 @@ class SentenceTransformer(nn.Sequential):
         """
         self.eval()
         if show_progress_bar is None:
-            show_progress_bar = (logger.getEffectiveLevel()==logging.INFO or logger.getEffectiveLevel()==logging.DEBUG)
+            show_progress_bar = (
+                        logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
 
         if convert_to_tensor:
             convert_to_numpy = False
 
         input_was_string = False
-        if isinstance(sentences, str): #Cast an individual sentence to a list with length 1
+        if isinstance(sentences, str):  # Cast an individual sentence to a list with length 1
             sentences = [sentences]
             input_was_string = True
 
@@ -184,7 +202,7 @@ class SentenceTransformer(nn.Sequential):
         sentences_sorted = [sentences[idx] for idx in length_sorted_idx]
 
         for start_index in trange(0, len(sentences), batch_size, desc="Batches", disable=not show_progress_bar):
-            sentences_batch = sentences_sorted[start_index:start_index+batch_size]
+            sentences_batch = sentences_sorted[start_index:start_index + batch_size]
             features = self.tokenize(sentences_batch)
             features = batch_to_device(features, device)
 
@@ -193,7 +211,7 @@ class SentenceTransformer(nn.Sequential):
                 embeddings = out_features[output_value]
 
                 if output_value == 'token_embeddings':
-                    #Set token embeddings to 0 for padding tokens
+                    # Set token embeddings to 0 for padding tokens
                     input_mask = out_features['attention_mask']
                     input_mask_expanded = input_mask.unsqueeze(-1).expand(embeddings.size()).float()
                     embeddings = embeddings * input_mask_expanded
@@ -218,8 +236,6 @@ class SentenceTransformer(nn.Sequential):
 
         return all_embeddings
 
-
-
     def start_multi_process_pool(self, target_devices: List[str] = None):
         """
         Starts multi process to process the encoding with several, independent processes.
@@ -234,7 +250,7 @@ class SentenceTransformer(nn.Sequential):
                 target_devices = ['cuda:{}'.format(i) for i in range(torch.cuda.device_count())]
             else:
                 logger.info("CUDA is not available. Start 4 CPU worker")
-                target_devices = ['cpu']*4
+                target_devices = ['cpu'] * 4
 
         logger.info("Start multi-process pool on devices: {}".format(', '.join(map(str, target_devices))))
 
@@ -244,12 +260,12 @@ class SentenceTransformer(nn.Sequential):
         processes = []
 
         for cuda_id in target_devices:
-            p = ctx.Process(target=SentenceTransformer._encode_multi_process_worker, args=(cuda_id, self, input_queue, output_queue), daemon=True)
+            p = ctx.Process(target=SentenceTransformer._encode_multi_process_worker,
+                            args=(cuda_id, self, input_queue, output_queue), daemon=True)
             p.start()
             processes.append(p)
 
         return {'input': input_queue, 'output': output_queue, 'processes': processes}
-
 
     @staticmethod
     def stop_multi_process_pool(pool):
@@ -266,8 +282,8 @@ class SentenceTransformer(nn.Sequential):
         pool['input'].close()
         pool['output'].close()
 
-
-    def encode_multi_process(self, sentences: List[str], pool: Dict[str, object], batch_size: int = 32, chunk_size: int = None):
+    def encode_multi_process(self, sentences: List[str], pool: Dict[str, object], batch_size: int = 32,
+                             chunk_size: int = None):
         """
         This method allows to run encode() on multiple GPUs. The sentences are chunked into smaller packages
         and sent to individual processes, which encode these on the different GPUs. This method is only suitable
@@ -313,11 +329,11 @@ class SentenceTransformer(nn.Sequential):
         while True:
             try:
                 id, batch_size, sentences = input_queue.get()
-                embeddings = model.encode(sentences, device=target_device,  show_progress_bar=False, convert_to_numpy=True, batch_size=batch_size)
+                embeddings = model.encode(sentences, device=target_device, show_progress_bar=False,
+                                          convert_to_numpy=True, batch_size=batch_size)
                 results_queue.put([id, embeddings])
             except queue.Empty:
                 break
-
 
     def get_max_seq_length(self):
         """
@@ -366,10 +382,11 @@ class SentenceTransformer(nn.Sequential):
 
         for idx, name in enumerate(self._modules):
             module = self._modules[name]
-            model_path = os.path.join(path, str(idx)+"_"+type(module).__name__)
+            model_path = os.path.join(path, str(idx) + "_" + type(module).__name__)
             os.makedirs(model_path, exist_ok=True)
             module.save(model_path)
-            contained_modules.append({'idx': idx, 'name': name, 'path': os.path.basename(model_path), 'type': type(module).__module__})
+            contained_modules.append(
+                {'idx': idx, 'name': name, 'path': os.path.basename(model_path), 'type': type(module).__module__})
 
         with open(os.path.join(path, 'modules.json'), 'w') as fOut:
             json.dump(contained_modules, fOut, indent=2)
@@ -407,7 +424,6 @@ class SentenceTransformer(nn.Sequential):
 
         return sentence_features, labels
 
-
     def _text_length(self, text: Union[List[int], List[List[int]]]):
         """
         Help function to get the length for the input text. Text can be either
@@ -425,11 +441,11 @@ class SentenceTransformer(nn.Sequential):
             train_objectives: Iterable[Tuple[DataLoader, nn.Module]],
             evaluator: SentenceEvaluator = None,
             epochs: int = 1,
-            steps_per_epoch = None,
+            steps_per_epoch=None,
             scheduler: str = 'WarmupLinear',
             warmup_steps: int = 10000,
             optimizer_class: Type[Optimizer] = transformers.AdamW,
-            optimizer_params : Dict[str, object]= {'lr': 2e-5, 'eps': 1e-6, 'correct_bias': False},
+            optimizer_params: Dict[str, object] = {'lr': 2e-5, 'eps': 1e-6, 'correct_bias': False},
             weight_decay: float = 0.01,
             evaluation_steps: int = 0,
             output_path: str = None,
@@ -437,7 +453,10 @@ class SentenceTransformer(nn.Sequential):
             max_grad_norm: float = 1,
             use_amp: bool = False,
             callback: Callable[[float, int, int], None] = None,
-            show_progress_bar: bool = True
+            show_progress_bar: bool = True,
+            log_every: int = 100,
+            wandb_project_name: str = None,
+            wandb_config: Dict[str, object] = None
             ):
         """
         Train the model with the given training objective
@@ -491,6 +510,22 @@ class SentenceTransformer(nn.Sequential):
 
         num_train_steps = int(steps_per_epoch * epochs)
 
+        # Prepare logger
+        if wandb_available and wandb_project_name:
+            wandb.init(project=wandb_project_name, config = {
+                'epochs': epochs,
+                'steps_per_epoch': steps_per_epoch,
+                'scheduler': scheduler,
+                'warmup_steps': warmup_steps,
+                'weight_decay': weight_decay,
+                'evaluation_steps': evaluation_steps,
+                'output_path': output_path,
+                'save_best_model': save_best_model,
+                'max_grad_norm': max_grad_norm,
+                'use_amp': use_amp,
+            }, **wandb_config)
+            wandb.watch(self)
+
         # Prepare optimizers
         optimizers = []
         schedulers = []
@@ -499,16 +534,17 @@ class SentenceTransformer(nn.Sequential):
 
             no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
             optimizer_grouped_parameters = [
-                {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': weight_decay},
+                {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)],
+                 'weight_decay': weight_decay},
                 {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
             ]
 
             optimizer = optimizer_class(optimizer_grouped_parameters, **optimizer_params)
-            scheduler_obj = self._get_scheduler(optimizer, scheduler=scheduler, warmup_steps=warmup_steps, t_total=num_train_steps)
+            scheduler_obj = self._get_scheduler(optimizer, scheduler=scheduler, warmup_steps=warmup_steps,
+                                                t_total=num_train_steps)
 
             optimizers.append(optimizer)
             schedulers.append(scheduler_obj)
-
 
         global_step = 0
         data_iterators = [iter(dataloader) for dataloader in dataloaders]
@@ -537,9 +573,7 @@ class SentenceTransformer(nn.Sequential):
                         data_iterators[train_idx] = data_iterator
                         data = next(data_iterator)
 
-
                     features, labels = data
-
 
                     if use_amp:
                         with autocast():
@@ -561,6 +595,14 @@ class SentenceTransformer(nn.Sequential):
 
                     optimizer.zero_grad()
 
+                    if wandb_available and (training_steps + 1) % log_every == 0:
+                        wandb.log(
+                            {
+                                loss_model.__class__.__name__: loss_value.item(),
+                                "lr": scheduler.get_last_lr()[0],
+                            }, step=global_step
+                        )
+
                     if not skip_scheduler:
                         scheduler.step()
 
@@ -569,12 +611,12 @@ class SentenceTransformer(nn.Sequential):
 
                 if evaluation_steps > 0 and training_steps % evaluation_steps == 0:
                     self._eval_during_training(evaluator, output_path, save_best_model, epoch,
-                                               training_steps, callback)
+                                               training_steps, global_step, callback)
                     for loss_model in loss_models:
                         loss_model.zero_grad()
                         loss_model.train()
 
-            self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1, callback)
+            self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1, global_step, callback)
 
     def evaluate(self, evaluator: SentenceEvaluator, output_path: str = None):
         """
@@ -589,17 +631,18 @@ class SentenceTransformer(nn.Sequential):
             os.makedirs(output_path, exist_ok=True)
         return evaluator(self, output_path)
 
-    def _eval_during_training(self, evaluator, output_path, save_best_model, epoch, steps, callback):
+    def _eval_during_training(self, evaluator, output_path, save_best_model, epoch, steps, global_step, callback):
         """Runs evaluation during the training"""
         if evaluator is not None:
             score = evaluator(self, output_path=output_path, epoch=epoch, steps=steps)
             if callback is not None:
                 callback(score, epoch, steps)
+            if wandb_available and wandb.run:  # if wandb init is called
+                wandb.log({evaluator.name if evaluator.name else evaluator.__class__.__name__: score}, step=global_step)
             if score > self.best_score:
                 self.best_score = score
                 if save_best_model:
                     self.save(output_path)
-
 
     @staticmethod
     def _get_scheduler(optimizer, scheduler: str, warmup_steps: int, t_total: int):
@@ -612,11 +655,15 @@ class SentenceTransformer(nn.Sequential):
         elif scheduler == 'warmupconstant':
             return transformers.get_constant_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps)
         elif scheduler == 'warmuplinear':
-            return transformers.get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
+            return transformers.get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps,
+                                                                num_training_steps=t_total)
         elif scheduler == 'warmupcosine':
-            return transformers.get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
+            return transformers.get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps,
+                                                                num_training_steps=t_total)
         elif scheduler == 'warmupcosinewithhardrestarts':
-            return transformers.get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total)
+            return transformers.get_cosine_with_hard_restarts_schedule_with_warmup(optimizer,
+                                                                                   num_warmup_steps=warmup_steps,
+                                                                                   num_training_steps=t_total)
         else:
             raise ValueError("Unknown scheduler {}".format(scheduler))
 
