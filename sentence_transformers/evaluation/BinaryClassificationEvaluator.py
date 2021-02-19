@@ -11,6 +11,7 @@ from ..readers import InputExample
 
 logger = logging.getLogger(__name__)
 
+
 class BinaryClassificationEvaluator(SentenceEvaluator):
     """
     Evaluate a model based on the similarity of the embeddings by calculating the accuracy of identifying similar and
@@ -31,7 +32,8 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
     :param write_csv: Write results to a CSV file
     """
 
-    def __init__(self, sentences1: List[str], sentences2: List[str], labels: List[int], name: str = '', batch_size: int = 32, show_progress_bar: bool = False, write_csv: bool = True):
+    def __init__(self, sentences1: List[str], sentences2: List[str], labels: List[int], name: str = '',
+                 batch_size: int = 32, show_progress_bar: bool = False, write_csv: bool = True, main_metric: str = 'ap'):
         self.sentences1 = sentences1
         self.sentences2 = sentences2
         self.labels = labels
@@ -41,19 +43,25 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
         for label in labels:
             assert (label == 0 or label == 1)
 
+        assert main_metric in {'ap', 'f1', 'precision', 'recall'}
+        self.main_metric = main_metric
+
         self.write_csv = write_csv
         self.name = name
         self.batch_size = batch_size
         if show_progress_bar is None:
-            show_progress_bar = (logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
+            show_progress_bar = (
+                        logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
         self.show_progress_bar = show_progress_bar
 
-        self.csv_file = "binary_classification_evaluation" + ("_"+name if name else '') + "_results.csv"
+        self.csv_file = "binary_classification_evaluation" + ("_" + name if name else '') + "_results.csv"
         self.csv_headers = ["epoch", "steps",
-                            "cosine_acc", "cosine_acc_threshold", "cosine_f1", "cosine_precision", "cosine_recall", "cosine_f1_threshold", "cosine_average_precision",
-                            "manhatten_acc", "manhatten_acc_threshold", "manhatten_f1", "manhatten_precision", "manhatten_recall", "manhatten_f1_threshold", "manhatten_average_precision",
-                            "eucledian_acc", "eucledian_acc_threshold", "eucledian_f1", "eucledian_precision", "eucledian_recall", "eucledian_f1_threshold", "eucledian_average_precision"]
-
+                            "cosine_acc", "cosine_acc_threshold", "cosine_f1", "cosine_precision", "cosine_recall",
+                            "cosine_f1_threshold", "cosine_average_precision",
+                            "manhatten_acc", "manhatten_acc_threshold", "manhatten_f1", "manhatten_precision",
+                            "manhatten_recall", "manhatten_f1_threshold", "manhatten_average_precision",
+                            "eucledian_acc", "eucledian_acc_threshold", "eucledian_f1", "eucledian_precision",
+                            "eucledian_recall", "eucledian_f1_threshold", "eucledian_average_precision"]
 
     @classmethod
     def from_input_examples(cls, examples: List[InputExample], **kwargs):
@@ -83,22 +91,24 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
         embeddings2 = model.encode(self.sentences2, batch_size=self.batch_size,
                                    show_progress_bar=self.show_progress_bar, convert_to_numpy=True)
 
-        cosine_scores = 1-paired_cosine_distances(embeddings1, embeddings2)
+        cosine_scores = 1 - paired_cosine_distances(embeddings1, embeddings2)
         manhattan_distances = paired_manhattan_distances(embeddings1, embeddings2)
         euclidean_distances = paired_euclidean_distances(embeddings1, embeddings2)
-
 
         labels = np.asarray(self.labels)
 
         file_output_data = [epoch, steps]
 
         main_score = None
-        for name, scores, reverse in [['Cosine-Similarity', cosine_scores, True], ['Manhatten-Distance', manhattan_distances, False], ['Euclidean-Distance', euclidean_distances, False]]:
+        for name, scores, reverse in [['Cosine-Similarity', cosine_scores, True],
+                                      ['Manhatten-Distance', manhattan_distances, False],
+                                      ['Euclidean-Distance', euclidean_distances, False]]:
             acc, acc_threshold = self.find_best_acc_and_threshold(scores, labels, reverse)
             f1, precision, recall, f1_threshold = self.find_best_f1_and_threshold(scores, labels, reverse)
             ap = average_precision_score(labels, scores * (1 if reverse else -1))
 
-            logger.info("Accuracy with {}:           {:.2f}\t(Threshold: {:.4f})".format(name, acc * 100, acc_threshold))
+            logger.info(
+                "Accuracy with {}:           {:.2f}\t(Threshold: {:.4f})".format(name, acc * 100, acc_threshold))
             logger.info("F1 with {}:                 {:.2f}\t(Threshold: {:.4f})".format(name, f1 * 100, f1_threshold))
             logger.info("Precision with {}:          {:.2f}".format(name, precision * 100))
             logger.info("Recall with {}:             {:.2f}".format(name, recall * 100))
@@ -106,8 +116,8 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
 
             file_output_data.extend([acc, acc_threshold, f1, precision, recall, f1_threshold, ap])
 
-            if main_score is None: #Use AveragePrecision with Cosine-Similarity as main score
-                main_score = ap
+            if main_score is None:  # Use AveragePrecision with Cosine-Similarity as main score
+                main_score = {'f1': f1, 'precision': precision, 'recall': recall, 'ap': ap}[self.main_metric]
 
         if output_path is not None and self.write_csv:
             csv_path = os.path.join(output_path, self.csv_file)
@@ -136,7 +146,7 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
         positive_so_far = 0
         remaining_negatives = sum(labels == 0)
 
-        for i in range(len(rows)-1):
+        for i in range(len(rows) - 1):
             score, label = rows[i]
             if label == 1:
                 positive_so_far += 1
@@ -146,7 +156,7 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
             acc = (positive_so_far + remaining_negatives) / len(labels)
             if acc > max_acc:
                 max_acc = acc
-                best_threshold = (rows[i][0] + rows[i+1][0]) / 2
+                best_threshold = (rows[i][0] + rows[i + 1][0]) / 2
 
         return max_acc, best_threshold
 
@@ -167,7 +177,7 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
         ncorrect = 0
         total_num_duplicates = sum(labels)
 
-        for i in range(len(rows)-1):
+        for i in range(len(rows) - 1):
             score, label = rows[i]
             nextract += 1
 
@@ -185,4 +195,3 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
                     threshold = (rows[i][0] + rows[i + 1][0]) / 2
 
         return best_f1, best_precision, best_recall, threshold
-
