@@ -456,7 +456,7 @@ class SentenceTransformer(nn.Sequential):
             show_progress_bar: bool = True,
             log_every: int = 100,
             wandb_project_name: str = None,
-            wandb_config: Dict[str, object] = None
+            wandb_config: Dict[str, object] = {}
             ):
         """
         Train the model with the given training objective
