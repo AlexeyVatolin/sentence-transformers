@@ -1,3 +1,4 @@
+import os
 from typing import List
 
 import torch
@@ -43,3 +44,7 @@ class SentenceElmo(nn.Module):
 
         output = {'input_ids': input_ids}
         return output
+
+    def save(self, output_path: str):
+        torch.save(self.elmo.state_dict(), os.path.join(output_path, 'model.pth'))
+
