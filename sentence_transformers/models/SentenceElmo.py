@@ -12,9 +12,8 @@ class SentenceElmo(nn.Module):
         super().__init__()
         assert average_mod in {'mean', 'max', 'last'}
 
-        self.elmo = Elmo(options_file=options_file, weight_file=weight_file, num_output_representations=1)
-        for param in self.elmo.parameters():
-            param.requires_grad = True
+        self.elmo = Elmo(options_file=options_file, weight_file=weight_file, num_output_representations=1,
+                         requires_grad=True)
 
         self.tokenizer = tokenizer
         self.average_mod = average_mod

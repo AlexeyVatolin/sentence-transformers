@@ -129,7 +129,7 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
 
             if wandb_available and wandb.run is not None:
                 for metric in metrics:
-                    wandb.log({'_'.join((self.name, name, metric)), metrics[metric]}, step=global_step)
+                    wandb.log({'_'.join((self.name, name, metric)): metrics[metric]}, step=global_step)
 
         if output_path is not None and self.write_csv:
             csv_path = os.path.join(output_path, self.csv_file)
