@@ -9,7 +9,7 @@ from sentence_transformers.models.tokenizer import WordTokenizer
 
 
 class SentenceElmo(nn.Module):
-    def __init__(self, options_file, weight_file, tokenizer, average_mod='mean'):
+    def __init__(self, options_file, weight_file, tokenizer, average_mod='mean', max_seq_length=128):
         super().__init__()
         assert average_mod in {'mean', 'max', 'last'}
 
@@ -18,6 +18,7 @@ class SentenceElmo(nn.Module):
 
         self.tokenizer = tokenizer
         self.average_mod = average_mod
+        self.max_seq_length = max_seq_length
 
     def get_word_embedding_dimension(self) -> int:
         return self.elmo.get_output_dim()
@@ -39,7 +40,7 @@ class SentenceElmo(nn.Module):
         return features
 
     def tokenize(self, texts: List[str]):
-        tokenized_texts = [self.tokenizer.tokenize(text) for text in texts]
+        tokenized_texts = [self.tokenizer.tokenize(text)[:self.max_seq_length] for text in texts]
         input_ids = batch_to_ids(tokenized_texts)
 
         output = {'input_ids': input_ids}
