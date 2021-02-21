@@ -6,14 +6,24 @@ from sklearn.metrics.pairwise import paired_cosine_distances, paired_euclidean_d
 from typing import List
 from ..readers import InputExample
 
+try:
+    import wandb
+
+    wandb_available = True
+except ImportError:
+    wandb_available = False
 
 logger = logging.getLogger(__name__)
+
 
 class TripletEvaluator(SentenceEvaluator):
     """
     Evaluate a model based on a triplet: (sentence, positive_example, negative_example). Checks if distance(sentence,positive_example) < distance(sentence, negative_example).
     """
-    def __init__(self, anchors: List[str], positives: List[str], negatives: List[str], main_distance_function: SimilarityFunction = None, name: str = '', batch_size: int = 16, show_progress_bar: bool = False, write_csv: bool = True):
+
+    def __init__(self, anchors: List[str], positives: List[str], negatives: List[str],
+                 main_distance_function: SimilarityFunction = None, name: str = '', batch_size: int = 16,
+                 show_progress_bar: bool = False, write_csv: bool = True):
         """
         Constructs an evaluator based for the dataset
 
@@ -36,10 +46,11 @@ class TripletEvaluator(SentenceEvaluator):
 
         self.batch_size = batch_size
         if show_progress_bar is None:
-            show_progress_bar = (logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
+            show_progress_bar = (
+                    logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
         self.show_progress_bar = show_progress_bar
 
-        self.csv_file: str = "triplet_evaluation"+("_"+name if name else '')+"_results.csv"
+        self.csv_file: str = "triplet_evaluation" + ("_" + name if name else '') + "_results.csv"
         self.csv_headers = ["epoch", "steps", "accuracy_cosinus", "accuracy_manhatten", "accuracy_euclidean"]
         self.write_csv = write_csv
 
@@ -55,7 +66,8 @@ class TripletEvaluator(SentenceEvaluator):
             negatives.append(example.texts[2])
         return cls(anchors, positives, negatives, **kwargs)
 
-    def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int = -1) -> float:
+    def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int = -1,
+                 global_step: int = -1) -> float:
         if epoch != -1:
             if steps == -1:
                 out_txt = " after epoch {}:".format(epoch)
@@ -64,7 +76,7 @@ class TripletEvaluator(SentenceEvaluator):
         else:
             out_txt = ":"
 
-        logger.info("TripletEvaluator: Evaluating the model on "+self.name+" dataset"+out_txt)
+        logger.info("TripletEvaluator: Evaluating the model on " + self.name + " dataset" + out_txt)
 
         num_triplets = 0
         num_correct_cos_triplets, num_correct_manhatten_triplets, num_correct_euclidean_triplets = 0, 0, 0
@@ -72,12 +84,11 @@ class TripletEvaluator(SentenceEvaluator):
         embeddings_anchors = model.encode(self.anchors, batch_size=self.batch_size,
                                           show_progress_bar=self.show_progress_bar, convert_to_numpy=True)
         embeddings_positives = model.encode(self.positives, batch_size=self.batch_size,
-                                          show_progress_bar=self.show_progress_bar, convert_to_numpy=True)
+                                            show_progress_bar=self.show_progress_bar, convert_to_numpy=True)
         embeddings_negatives = model.encode(self.negatives, batch_size=self.batch_size,
-                                          show_progress_bar=self.show_progress_bar, convert_to_numpy=True)
+                                            show_progress_bar=self.show_progress_bar, convert_to_numpy=True)
 
-
-        #Cosine distance
+        # Cosine distance
         pos_cos_distance = paired_cosine_distances(embeddings_anchors, embeddings_positives)
         neg_cos_distances = paired_cosine_distances(embeddings_anchors, embeddings_negatives)
 
@@ -105,9 +116,13 @@ class TripletEvaluator(SentenceEvaluator):
         accuracy_manhatten = num_correct_manhatten_triplets / num_triplets
         accuracy_euclidean = num_correct_euclidean_triplets / num_triplets
 
-        logger.info("Accuracy Cosine Distance:   \t{:.2f}".format(accuracy_cos*100))
-        logger.info("Accuracy Manhatten Distance:\t{:.2f}".format(accuracy_manhatten*100))
-        logger.info("Accuracy Euclidean Distance:\t{:.2f}\n".format(accuracy_euclidean*100))
+        logger.info("Accuracy Cosine Distance:   \t{:.2f}".format(accuracy_cos * 100))
+        logger.info("Accuracy Manhatten Distance:\t{:.2f}".format(accuracy_manhatten * 100))
+        logger.info("Accuracy Euclidean Distance:\t{:.2f}\n".format(accuracy_euclidean * 100))
+
+        if wandb_available and wandb.run is not None:
+            wandb.log(dict(zip(self.csv_headers[2:], [accuracy_cos, accuracy_manhatten, accuracy_euclidean])),
+                      step=global_step)
 
         if output_path is not None and self.write_csv:
             csv_path = os.path.join(output_path, self.csv_file)

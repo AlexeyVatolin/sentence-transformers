@@ -7,8 +7,15 @@ from ..util import batch_to_device
 import os
 import csv
 
+try:
+    import wandb
+
+    wandb_available = True
+except ImportError:
+    wandb_available = False
 
 logger = logging.getLogger(__name__)
+
 
 class LabelAccuracyEvaluator(SentenceEvaluator):
     """
@@ -19,7 +26,7 @@ class LabelAccuracyEvaluator(SentenceEvaluator):
     The results are written in a CSV. If a CSV already exists, then values are appended.
     """
 
-    def __init__(self, dataloader: DataLoader, name: str = "", softmax_model = None, write_csv: bool = True):
+    def __init__(self, dataloader: DataLoader, name: str = "", softmax_model=None, write_csv: bool = True):
         """
         Constructs an evaluator for the given dataset
 
@@ -31,13 +38,13 @@ class LabelAccuracyEvaluator(SentenceEvaluator):
         self.softmax_model = softmax_model
 
         if name:
-            name = "_"+name
+            name = "_" + name
 
         self.write_csv = write_csv
-        self.csv_file = "accuracy_evaluation"+name+"_results.csv"
+        self.csv_file = "accuracy_evaluation" + name + "_results.csv"
         self.csv_headers = ["epoch", "steps", "accuracy"]
 
-    def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int = -1) -> float:
+    def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int = -1, global_step: int = -1) -> float:
         model.eval()
         total = 0
         correct = 0
@@ -50,7 +57,7 @@ class LabelAccuracyEvaluator(SentenceEvaluator):
         else:
             out_txt = ":"
 
-        logger.info("Evaluation on the "+self.name+" dataset"+out_txt)
+        logger.info("Evaluation on the " + self.name + " dataset" + out_txt)
         self.dataloader.collate_fn = model.smart_batching_collate
         for step, batch in enumerate(tqdm(self.dataloader, desc="Evaluating")):
             features, label_ids = batch
@@ -62,9 +69,12 @@ class LabelAccuracyEvaluator(SentenceEvaluator):
 
             total += prediction.size(0)
             correct += torch.argmax(prediction, dim=1).eq(label_ids).sum().item()
-        accuracy = correct/total
+        accuracy = correct / total
 
         logger.info("Accuracy: {:.4f} ({}/{})\n".format(accuracy, correct, total))
+
+        if wandb_available and wandb.run is not None:
+            wandb.log({'accuracy': accuracy}, step=global_step)
 
         if output_path is not None and self.write_csv:
             csv_path = os.path.join(output_path, self.csv_file)

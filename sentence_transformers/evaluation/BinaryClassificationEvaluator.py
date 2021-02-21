@@ -8,6 +8,13 @@ import numpy as np
 from typing import List
 from ..readers import InputExample
 
+try:
+    import wandb
+
+    wandb_available = True
+except ImportError:
+    wandb_available = False
+
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +50,7 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
         for label in labels:
             assert (label == 0 or label == 1)
 
-        assert main_metric in {'ap', 'f1', 'precision', 'recall'}
+        assert main_metric in {'ap', 'f1', 'precision', 'recall', 'acc'}
         self.main_metric = main_metric
 
         self.write_csv = write_csv
@@ -75,7 +82,7 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
             scores.append(example.label)
         return cls(sentences1, sentences2, scores, **kwargs)
 
-    def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int = -1) -> float:
+    def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int = -1, global_step: int = -1) -> float:
 
         if epoch != -1:
             if steps == -1:
@@ -107,17 +114,22 @@ class BinaryClassificationEvaluator(SentenceEvaluator):
             f1, precision, recall, f1_threshold = self.find_best_f1_and_threshold(scores, labels, reverse)
             ap = average_precision_score(labels, scores * (1 if reverse else -1))
 
-            logger.info(
-                "Accuracy with {}:           {:.2f}\t(Threshold: {:.4f})".format(name, acc * 100, acc_threshold))
+            logger.info("Accuracy with {}:           {:.2f}\t(Threshold: {:.4f})".format(name, acc * 100, acc_threshold))
             logger.info("F1 with {}:                 {:.2f}\t(Threshold: {:.4f})".format(name, f1 * 100, f1_threshold))
             logger.info("Precision with {}:          {:.2f}".format(name, precision * 100))
             logger.info("Recall with {}:             {:.2f}".format(name, recall * 100))
             logger.info("Average Precision with {}:  {:.2f}\n".format(name, ap * 100))
 
             file_output_data.extend([acc, acc_threshold, f1, precision, recall, f1_threshold, ap])
+            metrics = {'f1': f1, 'precision': precision, 'recall': recall, 'ap': ap, 'acc': acc,
+                       'acc_threshold': acc_threshold, 'f1_threshold': f1_threshold}
 
             if main_score is None:  # Use AveragePrecision with Cosine-Similarity as main score
-                main_score = {'f1': f1, 'precision': precision, 'recall': recall, 'ap': ap}[self.main_metric]
+                main_score = metrics[self.main_metric]
+
+            if wandb_available and wandb.run is not None:
+                for metric in metrics:
+                    wandb.log({'_'.join((self.name, name, metric)), metrics[metric]}, step=global_step)
 
         if output_path is not None and self.write_csv:
             csv_path = os.path.join(output_path, self.csv_file)

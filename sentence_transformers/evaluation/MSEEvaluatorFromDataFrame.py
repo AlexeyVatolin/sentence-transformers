@@ -8,6 +8,12 @@ import logging
 import os
 import csv
 
+try:
+    import wandb
+
+    wandb_available = True
+except ImportError:
+    wandb_available = False
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +65,7 @@ class MSEEvaluatorFromDataFrame(SentenceEvaluator):
         all_src_embeddings = teacher_model.encode(all_source_sentences, batch_size=self.batch_size)
         self.teacher_embeddings = {sent: emb for sent, emb in zip(all_source_sentences, all_src_embeddings)}
 
-    def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int  = -1):
+    def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int  = -1, global_step: int = -1):
         model.eval()
 
         mse_scores = []
@@ -75,6 +81,9 @@ class MSEEvaluatorFromDataFrame(SentenceEvaluator):
 
             logger.info("MSE evaluation on {} dataset - {}-{}:".format(self.name, src_lang, trg_lang))
             logger.info("MSE (*100):\t{:4f}".format(mse))
+
+            if wandb_available and wandb.run is not None:
+                wandb.log({'MSE_{}_{}'.format(src_lang, trg_lang): mse}, step=global_step)
 
         if output_path is not None and self.write_csv:
             csv_path = os.path.join(output_path, self.csv_file)

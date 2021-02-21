@@ -8,8 +8,15 @@ import scipy.spatial
 from typing import List
 import torch
 
+try:
+    import wandb
+
+    wandb_available = True
+except ImportError:
+    wandb_available = False
 
 logger = logging.getLogger(__name__)
+
 
 class TranslationEvaluator(SentenceEvaluator):
     """
@@ -17,7 +24,9 @@ class TranslationEvaluator(SentenceEvaluator):
     and assuming that fr_i is the translation of en_i.
     Checks if vec(en_i) has the highest similarity to vec(fr_i). Computes the accurarcy in both directions
     """
-    def __init__(self, source_sentences: List[str], target_sentences: List[str],  show_progress_bar: bool = False, batch_size: int = 16, name: str = '', print_wrong_matches: bool = False, write_csv: bool = True):
+
+    def __init__(self, source_sentences: List[str], target_sentences: List[str], show_progress_bar: bool = False,
+                 batch_size: int = 16, name: str = '', print_wrong_matches: bool = False, write_csv: bool = True):
         """
         Constructs an evaluator based for the dataset
 
@@ -42,13 +51,13 @@ class TranslationEvaluator(SentenceEvaluator):
         assert len(self.source_sentences) == len(self.target_sentences)
 
         if name:
-            name = "_"+name
+            name = "_" + name
 
-        self.csv_file = "translation_evaluation"+name+"_results.csv"
+        self.csv_file = "translation_evaluation" + name + "_results.csv"
         self.csv_headers = ["epoch", "steps", "src2trg", "trg2src"]
         self.write_csv = write_csv
 
-    def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int = -1) -> float:
+    def __call__(self, model, output_path: str = None, epoch: int = -1, steps: int = -1, global_step: int = -1) -> float:
         if epoch != -1:
             if steps == -1:
                 out_txt = " after epoch {}:".format(epoch)
@@ -57,11 +66,14 @@ class TranslationEvaluator(SentenceEvaluator):
         else:
             out_txt = ":"
 
-        logger.info("Evaluating translation matching Accuracy on "+self.name+" dataset"+out_txt)
+        logger.info("Evaluating translation matching Accuracy on " + self.name + " dataset" + out_txt)
 
-        embeddings1 = torch.stack(model.encode(self.source_sentences, show_progress_bar=self.show_progress_bar, batch_size=self.batch_size, convert_to_numpy=False))
-        embeddings2 = torch.stack(model.encode(self.target_sentences, show_progress_bar=self.show_progress_bar, batch_size=self.batch_size, convert_to_numpy=False))
-
+        embeddings1 = torch.stack(
+            model.encode(self.source_sentences, show_progress_bar=self.show_progress_bar, batch_size=self.batch_size,
+                         convert_to_numpy=False))
+        embeddings2 = torch.stack(
+            model.encode(self.target_sentences, show_progress_bar=self.show_progress_bar, batch_size=self.batch_size,
+                         convert_to_numpy=False))
 
         cos_sims = pytorch_cos_sim(embeddings1, embeddings2).detach().cpu().numpy()
 
@@ -84,8 +96,6 @@ class TranslationEvaluator(SentenceEvaluator):
                 for idx, score in results[0:5]:
                     print("\t", idx, "(Score: %.4f)" % (score), self.target_sentences[idx])
 
-
-
         cos_sims = cos_sims.T
         for i in range(len(cos_sims)):
             max_idx = np.argmax(cos_sims[i])
@@ -95,8 +105,11 @@ class TranslationEvaluator(SentenceEvaluator):
         acc_src2trg = correct_src2trg / len(cos_sims)
         acc_trg2src = correct_trg2src / len(cos_sims)
 
-        logger.info("Accuracy src2trg: {:.2f}".format(acc_src2trg*100))
-        logger.info("Accuracy trg2src: {:.2f}".format(acc_trg2src*100))
+        if wandb_available and wandb.run is not None:
+            wandb.log(dict(zip(self.csv_headers[2:], [acc_src2trg, acc_trg2src])), step=global_step)
+
+        logger.info("Accuracy src2trg: {:.2f}".format(acc_src2trg * 100))
+        logger.info("Accuracy trg2src: {:.2f}".format(acc_trg2src * 100))
 
         if output_path is not None and self.write_csv:
             csv_path = os.path.join(output_path, self.csv_file)
@@ -108,4 +121,4 @@ class TranslationEvaluator(SentenceEvaluator):
 
                 writer.writerow([epoch, steps, acc_src2trg, acc_trg2src])
 
-        return (acc_src2trg+acc_trg2src)/2
+        return (acc_src2trg + acc_trg2src) / 2

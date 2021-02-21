@@ -11,6 +11,7 @@ from .LSTM import LSTM
 from .Normalize import Normalize
 from .Pooling import Pooling
 from .RoBERTa import RoBERTa
+from .SentenceElmo import SentenceElmo
 from .T5 import T5
 from .WKPooling import WKPooling
 from .WeightedLayerPooling import WeightedLayerPooling

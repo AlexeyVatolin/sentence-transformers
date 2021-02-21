@@ -595,7 +595,8 @@ class SentenceTransformer(nn.Sequential):
 
                     optimizer.zero_grad()
 
-                    if wandb_available and (training_steps + 1) % log_every == 0:
+                    # if wandb init is called
+                    if wandb_available and wandb.run is not None and (training_steps + 1) % log_every == 0:
                         wandb.log(
                             {
                                 loss_model.__class__.__name__: loss_value.item(),
@@ -634,11 +635,11 @@ class SentenceTransformer(nn.Sequential):
     def _eval_during_training(self, evaluator, output_path, save_best_model, epoch, steps, global_step, callback):
         """Runs evaluation during the training"""
         if evaluator is not None:
-            score = evaluator(self, output_path=output_path, epoch=epoch, steps=steps)
+            score = evaluator(self, output_path=output_path, epoch=epoch, steps=steps, global_step=global_step)
             if callback is not None:
                 callback(score, epoch, steps)
-            if wandb_available and wandb.run:  # if wandb init is called
-                wandb.log({evaluator.name if evaluator.name else evaluator.__class__.__name__: score}, step=global_step)
+            # if wandb_available and wandb.run is not None:  # if wandb init is called
+            #     wandb.log({evaluator.name if evaluator.name else evaluator.__class__.__name__: score}, step=global_step)
             if score > self.best_score:
                 self.best_score = score
                 if save_best_model:
