@@ -512,18 +512,19 @@ class SentenceTransformer(nn.Sequential):
 
         # Prepare logger
         if wandb_available and wandb_project_name:
-            wandb.init(project=wandb_project_name, config = {
-                'epochs': epochs,
-                'steps_per_epoch': steps_per_epoch,
-                'scheduler': scheduler,
-                'warmup_steps': warmup_steps,
-                'weight_decay': weight_decay,
-                'evaluation_steps': evaluation_steps,
-                'output_path': output_path,
-                'save_best_model': save_best_model,
-                'max_grad_norm': max_grad_norm,
-                'use_amp': use_amp,
-            }, **wandb_config)
+            if not wandb.setup().settings.sweep_id:
+                wandb.init(project=wandb_project_name, config = {
+                    'epochs': epochs,
+                    'steps_per_epoch': steps_per_epoch,
+                    'scheduler': scheduler,
+                    'warmup_steps': warmup_steps,
+                    'weight_decay': weight_decay,
+                    'evaluation_steps': evaluation_steps,
+                    'output_path': output_path,
+                    'save_best_model': save_best_model,
+                    'max_grad_norm': max_grad_norm,
+                    'use_amp': use_amp,
+                }, **wandb_config)
             wandb.watch(self)
 
         # Prepare optimizers
