@@ -7,6 +7,7 @@ from .CNN import CNN
 from .CamemBERT import CamemBERT
 from .Dense import Dense
 from .DistilBERT import DistilBERT
+from .GeneralizedPooling import GeneralizedPooling, GeneralizedMultiheadPooling
 from .LSTM import LSTM
 from .Normalize import Normalize
 from .Pooling import Pooling

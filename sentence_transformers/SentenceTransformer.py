@@ -182,7 +182,7 @@ class SentenceTransformer(nn.Sequential):
         self.eval()
         if show_progress_bar is None:
             show_progress_bar = (
-                        logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
+                    logger.getEffectiveLevel() == logging.INFO or logger.getEffectiveLevel() == logging.DEBUG)
 
         if convert_to_tensor:
             convert_to_numpy = False
@@ -513,7 +513,7 @@ class SentenceTransformer(nn.Sequential):
         # Prepare logger
         if wandb_available and wandb_project_name:
             if not wandb.setup().settings.sweep_id:
-                wandb.init(project=wandb_project_name, config = {
+                config = {
                     'epochs': epochs,
                     'steps_per_epoch': steps_per_epoch,
                     'scheduler': scheduler,
@@ -524,7 +524,8 @@ class SentenceTransformer(nn.Sequential):
                     'save_best_model': save_best_model,
                     'max_grad_norm': max_grad_norm,
                     'use_amp': use_amp,
-                }, **wandb_config)
+                }
+                wandb.init(project=wandb_project_name, config=config, **wandb_config)
             wandb.watch(self)
 
         # Prepare optimizers
