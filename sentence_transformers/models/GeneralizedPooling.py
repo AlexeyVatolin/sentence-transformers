@@ -1,3 +1,4 @@
+import os
 from typing import Dict
 
 import torch
@@ -23,11 +24,19 @@ class GeneralizedPooling(nn.Module):
         features['sentence_embedding'] = output_vector
         return features
 
+    def save(self, output_path: str):
+        torch.save(self.state_dict(), os.path.join(output_path, 'model.pth'))
+
+    def get_sentence_embedding_dimension(self):
+        return self.word_embedding_dimension
+
 
 class GeneralizedMultiheadPooling(nn.Module):
-    def __init__(self, word_embedding_dimension: int, num_heads: int=2):
+    def __init__(self, word_embedding_dimension: int, num_heads: int = 2):
         super().__init__()
         self.poolings = nn.ModuleList([GeneralizedPooling(word_embedding_dimension) for _ in range(num_heads)])
+        self.word_embedding_dimension = word_embedding_dimension
+        self.num_heads = num_heads
 
     def forward(self, features: Dict[str, Tensor]):
         outputs = []
@@ -35,5 +44,11 @@ class GeneralizedMultiheadPooling(nn.Module):
         for pooling in self.poolings:
             outputs.append(pooling(features)['sentence_embedding'])
 
-        features['sentence_embedding'] = torch.cat(outputs, axis=-1)
+        features['sentence_embedding'] = torch.cat(outputs, dim=-1)
         return features
+
+    def save(self, output_path: str):
+        torch.save(self.state_dict(), os.path.join(output_path, 'model.pth'))
+
+    def get_sentence_embedding_dimension(self):
+        return self.word_embedding_dimension * self.num_heads
