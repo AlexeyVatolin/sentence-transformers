@@ -17,11 +17,12 @@ class GeneralizedPooling(nn.Module):
         token_embeddings = features['token_embeddings']
         # (batch, seq_len, word_dim)
         f = F.relu(self.fc1(token_embeddings))
-        f = F.softmax(self.fc2(f), dim=-2)
+        sentence_attention = F.softmax(self.fc2(f), dim=-2)
 
         # (batch, word_dim)
-        output_vector = torch.sum(f * token_embeddings, dim=-2)
+        output_vector = torch.sum(sentence_attention * token_embeddings, dim=-2)
         features['sentence_embedding'] = output_vector
+        features['sentence_attention'] = f
         return features
 
     def save(self, output_path: str):
@@ -32,6 +33,10 @@ class GeneralizedPooling(nn.Module):
 
 
 class GeneralizedMultiheadPooling(nn.Module):
+    """
+    Based on https://arxiv.org/pdf/1806.09828.pdf
+    Enhancing Sentence Embedding with Generalized Pooling
+    """
     def __init__(self, word_embedding_dimension: int, num_heads: int = 2):
         super().__init__()
         self.poolings = nn.ModuleList([GeneralizedPooling(word_embedding_dimension) for _ in range(num_heads)])

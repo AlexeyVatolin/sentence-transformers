@@ -5,7 +5,7 @@ from .BinaryClassificationEvaluator import BinaryClassificationEvaluator
 from .EmbeddingSimilarityEvaluator import EmbeddingSimilarityEvaluator
 
 from .InformationRetrievalEvaluator import InformationRetrievalEvaluator
-from .LabelAccuracyEvaluator import LabelAccuracyEvaluator
+from .MulticlassEvaluator import MulticlassEvaluator
 from .MSEEvaluator import MSEEvaluator
 from .MSEEvaluatorFromDataFrame import MSEEvaluatorFromDataFrame
 from .ParaphraseMiningEvaluator import ParaphraseMiningEvaluator

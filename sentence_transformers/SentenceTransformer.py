@@ -12,6 +12,7 @@ import transformers
 import torch
 from torch import nn, Tensor, device
 from torch.optim import Optimizer
+from torch.optim.swa_utils import AveragedModel, SWALR
 from torch.utils.data import DataLoader
 import torch.multiprocessing as mp
 from tqdm.autonotebook import tqdm, trange
@@ -456,7 +457,11 @@ class SentenceTransformer(nn.Sequential):
             show_progress_bar: bool = True,
             log_every: int = 100,
             wandb_project_name: str = None,
-            wandb_config: Dict[str, object] = {}
+            wandb_config: Dict[str, object] = {},
+            use_swa: bool = False,
+            swa_epochs_start: int = 5,
+            swa_anneal_epochs: int = 10,
+            swa_lr: float = 0.05,
             ):
         """
         Train the model with the given training objective
@@ -528,6 +533,10 @@ class SentenceTransformer(nn.Sequential):
                 wandb.init(project=wandb_project_name, config=config, **wandb_config)
             wandb.watch(self)
 
+        # SWA
+        if use_swa:
+            swa_model = AveragedModel(self)
+
         # Prepare optimizers
         optimizers = []
         schedulers = []
@@ -547,6 +556,8 @@ class SentenceTransformer(nn.Sequential):
 
             optimizers.append(optimizer)
             schedulers.append(scheduler_obj)
+        if use_swa:
+            swa_scheduler = SWALR(optimizers[0], swa_lr=swa_lr, anneal_epochs=swa_anneal_epochs, anneal_strategy='linear')
 
         global_step = 0
         data_iterators = [iter(dataloader) for dataloader in dataloaders]
@@ -619,7 +630,13 @@ class SentenceTransformer(nn.Sequential):
                         loss_model.zero_grad()
                         loss_model.train()
 
+            if use_swa and epoch > swa_epochs_start:
+                swa_model.update_parameters(self)
+                swa_scheduler.step()
+
             self._eval_during_training(evaluator, output_path, save_best_model, epoch, -1, global_step, callback)
+        if use_swa:
+            return swa_model
 
     def evaluate(self, evaluator: SentenceEvaluator, output_path: str = None):
         """
