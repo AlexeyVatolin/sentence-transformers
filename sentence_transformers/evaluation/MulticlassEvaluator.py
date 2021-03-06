@@ -37,7 +37,7 @@ class MulticlassEvaluator(SentenceEvaluator):
             the data for the evaluation
         """
         assert average in {'micro', 'macro', 'weighted'}
-        assert average in {"accuracy", f"precision_{average}", f"recall_{average}", f"f1_{average}"}
+        assert main_metric in {"accuracy", f"precision_{average}", f"recall_{average}", f"f1_{average}"}
 
         self.dataloader = dataloader
         self.name = name
