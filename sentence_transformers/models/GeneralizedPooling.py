@@ -13,6 +13,7 @@ class GeneralizedPooling(nn.Module):
         self.fc1 = nn.Linear(word_embedding_dimension, word_embedding_dimension)
         self.fc2 = nn.Linear(word_embedding_dimension, word_embedding_dimension)
         self.word_embedding_dimension = word_embedding_dimension
+        self.config_keys = ['word_embedding_dimension']
 
     def forward(self, features: Dict[str, Tensor]):
         token_embeddings = features['token_embeddings']
