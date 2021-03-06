@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Dict
 
@@ -26,10 +27,25 @@ class GeneralizedPooling(nn.Module):
         return features
 
     def save(self, output_path: str):
+        with open(os.path.join(output_path, 'config.json'), 'w') as fOut:
+            json.dump(self.get_config_dict(), fOut, indent=2)
+
         torch.save(self.state_dict(), os.path.join(output_path, 'model.pth'))
 
     def get_sentence_embedding_dimension(self):
         return self.word_embedding_dimension
+
+    def get_config_dict(self):
+        return {key: self.__dict__[key] for key in self.config_keys}
+
+    @staticmethod
+    def load(input_path):
+        with open(os.path.join(input_path, 'config.json')) as fIn:
+            config = json.load(fIn)
+
+        model = GeneralizedPooling(**config)
+        model.load_state_dict(torch.load(os.path.join(input_path, 'model.pth'), map_location=torch.device('cpu')))
+        return model
 
 
 class GeneralizedMultiheadPooling(nn.Module):
@@ -40,6 +56,7 @@ class GeneralizedMultiheadPooling(nn.Module):
     def __init__(self, word_embedding_dimension: int, num_heads: int = 2):
         super().__init__()
         self.poolings = nn.ModuleList([GeneralizedPooling(word_embedding_dimension) for _ in range(num_heads)])
+        self.config_keys = ['word_embedding_dimension', 'num_heads']
         self.word_embedding_dimension = word_embedding_dimension
         self.num_heads = num_heads
 
@@ -52,8 +69,23 @@ class GeneralizedMultiheadPooling(nn.Module):
         features['sentence_embedding'] = torch.cat(outputs, dim=-1)
         return features
 
+    def get_config_dict(self):
+        return {key: self.__dict__[key] for key in self.config_keys}
+
     def save(self, output_path: str):
+        with open(os.path.join(output_path, 'config.json'), 'w') as fOut:
+            json.dump(self.get_config_dict(), fOut, indent=2)
+
         torch.save(self.state_dict(), os.path.join(output_path, 'model.pth'))
 
     def get_sentence_embedding_dimension(self):
         return self.word_embedding_dimension * self.num_heads
+
+    @staticmethod
+    def load(input_path):
+        with open(os.path.join(input_path, 'config.json')) as fIn:
+            config = json.load(fIn)
+
+        model = GeneralizedMultiheadPooling(**config)
+        model.load_state_dict(torch.load(os.path.join(input_path, 'model.pth'), map_location=torch.device('cpu')))
+        return model
